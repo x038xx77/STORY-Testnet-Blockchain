@@ -2,7 +2,6 @@
 
 # Define color codes for console output to improve readability
 green="\e[32m"  # Green color for successful messages
-pink="\e[35m"   # Pink color for informational messages
 reset="\e[0m"   # Reset color to default
 
 # Step 1: Update and upgrade the system
@@ -115,24 +114,24 @@ EOF
 echo -e "${green}************* Create Prometheus service *************${reset}"
 sudo tee /etc/systemd/system/prometheus.service <<EOF
 [Unit]
-Description=Prometheus  # Description of the service
-Wants=network-online.target  # Dependencies
-After=network-online.target  # Ensure the network is online before starting
+Description=Prometheus
+Wants=network-online.target
+After=network-online.target
 
 [Service]
-Type=simple  # Service type
-User=root  # Run as root user
-ExecReload=/bin/kill -HUP \$MAINPID  # Reload the service
-ExecStart=/usr/local/bin/prometheus \  # Start command for Prometheus
-  --config.file=/etc/prometheus/prometheus.yml \  # Path to the config file
-  --storage.tsdb.path=/var/lib/prometheus \  # Path for the storage
-  --web.console.templates=/etc/prometheus/consoles \  # Path for console templates
-  --web.console.libraries=/etc/prometheus/console_libraries \  # Path for console libraries
-  --web.listen-address=0.0.0.0:9344  # Address to listen on
-Restart=always  # Always restart the service on failure
+Type=simple
+User=root
+ExecReload=/bin/kill -HUP \$MAINPID
+ExecStart=/usr/local/bin/prometheus \
+  --config.file=/etc/prometheus/prometheus.yml \
+  --storage.tsdb.path=/var/lib/prometheus \
+  --web.console.templates=/etc/prometheus/consoles \
+  --web.console.libraries=/etc/prometheus/console_libraries \
+  --web.listen-address=0.0.0.0:9344
+Restart=always
 
 [Install]
-WantedBy=multi-user.target  # Target for multi-user mode
+WantedBy=multi-user.target
 EOF
 
 # Step 13: Reload systemd, enable, and start Prometheus
