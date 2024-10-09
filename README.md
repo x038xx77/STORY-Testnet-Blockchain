@@ -273,4 +273,4 @@ systemctl status prometheus-node-exporter
 
 ### URL Dashboard Grafana!
 
-[<img alt="final" src="https://github.com/x038xx77/STORY-Testnet-Blockchain/blob/main/setupСomplete.png" width="160px">paceX038i](http://$real_ip:9346/d/UJyurCTWz/${reset}) - url dasboard grafana.
+[<img alt="final" src="https://github.com/x038xx77/STORY-Testnet-Blockchain/blob/main/setupСomplete.png" width="560px">]
