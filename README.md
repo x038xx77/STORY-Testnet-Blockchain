@@ -273,4 +273,4 @@ systemctl status prometheus-node-exporter
 
 ### Feel free to make any further adjustments as needed!
 
-![Setup Complete](https://github.com/x038xx77/STORY-Testnet-Blockchain/raw/main/SetupComplete.png)
+![Setup Complete](./SetupComplete.png)
