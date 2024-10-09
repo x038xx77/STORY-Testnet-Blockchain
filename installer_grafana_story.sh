@@ -237,7 +237,8 @@ curl -s "$dashboard_url" -o $HOME/dashboard_story.json
 
 # Replace validator address in the dashboard JSON
 echo -e "${green}***********Replacing validator address in the dashboard_story.json*************${reset}"
-sed -i "s/FCB1BF9FBACE6819137DFC999255175B7CA23C5E/$story_address/g" $HOME/dashboard_story.json
+sed -i "s/FCB1BF9FBACE681913B4A3C20A5FF09B93B6AA00/$story_address/g" $HOME/dashboard_story.json
+sed -i "s/$prometheus_url/$grafana_host/g" $HOME/dashboard_story.json
 
 # Adding the dashboard
 echo -e "${green}***********Adding dashboard to Grafana*************${reset}"
@@ -247,4 +248,4 @@ curl -X POST -H "Content-Type: application/json" \
   "$grafana_host/api/dashboards/db"
 
 # Final output
-echo -e "${pink}***********Grafana is set up successfully! You can access it at: $grafana_host***********${reset}"
+echo -e "${pink}***********Grafana is set up successfully! You can access it at: $grafana_host/dashboard/file/dashboard_story.json***********${reset}"
