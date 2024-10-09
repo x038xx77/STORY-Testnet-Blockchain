@@ -269,13 +269,21 @@ EOF
 
 response=$(curl -s -X POST -H "Content-Type: application/json" -d "$dashboard_payload" "$grafana_host/api/dashboards/db" -u "$admin_user:$admin_password")
 
+# Get the server's IP address
+server_ip=$(hostname -I | awk '{print $1}')
+
+
 # Extract the URL from the response
 dashboard_uid=$(echo "$response" | jq -r '.uid')
 
 if [ "$dashboard_uid" != "null" ]; then
-  echo "Grafana is set up successfully! You can access it at: $grafana_host/d/$dashboard_uid/story-testnet-blockchain"
+  echo "Grafana is set up successfully! You can access it at: http://$server_ip/d/$dashboard_uid/story-testnet-blockchain"
+  echo "Your Grafana login credentials:"
+  echo "Username: $admin_user"
+  echo "Password: $admin_password"
 else
   echo "Failed to import the dashboard."
 fi
 
 echo -e "${green}***********Setup complete!*************${reset}"
+
