@@ -271,6 +271,6 @@ systemctl status prometheus
 systemctl status prometheus-node-exporter
 ```
 
-### Feel free to make any further adjustments as needed!
+### URL Dashboard Grafana!
 
- [<img alt="final" src="SetupComplete.png" width="16px">paceX038i](http://$real_ip:9346/d/UJyurCTWz/${reset}) - url dasboard grafana.
+[<img alt="final" src="./setupComplete.png" width="16px">paceX038i](http://$real_ip:9346/d/UJyurCTWz/${reset}) - url dasboard grafana.
