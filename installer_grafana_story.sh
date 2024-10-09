@@ -1,270 +1,206 @@
 #!/bin/bash
 
-# Define colors for output
-green="\e[32m"
-pink="\e[35m"
-reset="\e[0m"
+# Define color codes for output messages
+green="\e[32m"  # Green color for success messages
+pink="\e[35m"   # Pink color for additional messages
+reset="\e[0m"   # Reset color
 
-# Update and upgrade the system
-echo -e "${green}*************Update and upgrade the system*************${reset}"
-apt-get update -y
-DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+# Update and upgrade the system packages
+echo -e "${green}************* Updating and upgrading the system *************${reset}"
+apt-get update -y             # Update package lists
+DEBIAN_FRONTEND=noninteractive apt-get upgrade -y  # Upgrade packages without user interaction
 
-# Install necessary dependencies
-echo -e "${green}*************Install necessary dependencies*************${reset}"
-apt-get install -y curl tar wget original-awk gawk netcat jq
+# Install necessary dependencies for the script execution
+echo -e "${green}************* Installing necessary dependencies *************${reset}"
+apt-get install -y curl tar wget gawk netcat jq  # Install essential tools
 
-# Exit the script on any error
+# Exit the script if any command fails
 set -e
 
-# Ensure the script is run as root
-echo -e "${green}*************Ensure the script is run as root*************${reset}"
+# Ensure the script is executed with root privileges
+echo -e "${green}************* Checking for root privileges *************${reset}"
 if [ "$EUID" -ne 0 ]; then
-  echo "Please run as root"
-  exit 1
+  echo "Please run this script as root."
+  exit 1  # Exit if not run as root
 fi
 
-# Fetch the node status
-echo -e "${green}*************Receive status of node*************${reset}"
+# Fetch the status of the Story node to gather information
+echo -e "${green}************* Retrieving status of the Story node *************${reset}"
+# Extract the RPC port from the configuration file
 port=$(awk '/\[rpc\]/ {f=1} f && /laddr/ {match($0, /127.0.0.1:([0-9]+)/, arr); print arr[1]; f=0}' $HOME/.story/story/config/config.toml)
+# Fetch JSON data from the node status endpoint
 json_data=$(curl -s http://localhost:$port/status)
-story_address=$(echo "$json_data" | jq -r '.result.validator_info.address')
-network=$(echo "$json_data" | jq -r '.result.node_info.network')
+story_address=$(echo "$json_data" | jq -r '.result.validator_info.address')  # Extract validator address
+network=$(echo "$json_data" | jq -r '.result.node_info.network')  # Extract network name
 
-# Source bash profile if it exists
-touch .bash_profile
-source .bash_profile
+# Source the user's bash profile if it exists
+touch .bash_profile  # Create the file if it doesn't exist
+source .bash_profile  # Load environment variables from the profile
 
-# Function to check service status
+# Function to check the status of a systemd service
 check_service_status() {
-  service_name="$1"
+  service_name="$1"  # Name of the service to check
   if systemctl is-active --quiet "$service_name"; then
-    echo "$service_name is running."
+    echo "$service_name is running."  # Service is active
   else
-    echo "$service_name is not running."
+    echo "$service_name is not running."  # Service is inactive
   fi
 }
 
-# Create necessary directories if they don't already exist or aren't empty
-echo -e "${green}*************Create necessary directories***********${reset}"
-directories=("/var/lib/prometheus" "/etc/prometheus/rules" "/etc/prometheus/rules.d" "/etc/prometheus/files_sd")
+# Create necessary directories for Prometheus if they don't exist or are empty
+echo -e "${green}************* Creating necessary directories *************${reset}"
+directories=("/var/lib/prometheus" "/etc/prometheus/rules" "/etc/prometheus/rules.d" "/etc/prometheus/files_sd")  # List of required directories
 
+# Loop through each directory in the list
 for dir in "${directories[@]}"; do
   if [ -d "$dir" ] && [ "$(ls -A $dir)" ]; then
-    echo "$dir already exists and is not empty. Skipping..."
+    echo "$dir already exists and is not empty. Skipping..."  # Skip if directory is non-empty
   else
-    mkdir -p "$dir"
-    echo "Created directory: $dir"
+    mkdir -p "$dir"  # Create the directory
+    echo "Created directory: $dir"  # Confirmation message
   fi
 done
 
-# Download and extract Prometheus
-echo -e "${green}*************Download and extract Prometheus***********${reset}"
-cd $HOME
-rm -rf prometheus*
+# Download and extract Prometheus binary
+echo -e "${green}************* Downloading and extracting Prometheus *************${reset}"
+cd $HOME  # Change to home directory
+rm -rf prometheus*  # Remove any previous Prometheus installations
+# Download the Prometheus tarball from the official release
 wget https://github.com/prometheus/prometheus/releases/download/v2.45.0/prometheus-2.45.0.linux-amd64.tar.gz
-sleep 1
-tar xvf prometheus-2.45.0.linux-amd64.tar.gz
-rm prometheus-2.45.0.linux-amd64.tar.gz
-cd prometheus*/
+sleep 1  # Pause for a second to ensure download completion
+tar xvf prometheus-2.45.0.linux-amd64.tar.gz  # Extract the downloaded tarball
+rm prometheus-2.45.0.linux-amd64.tar.gz  # Remove the tarball after extraction
+cd prometheus*/  # Change to the extracted directory
 
-# Move necessary directories to Prometheus locations if they don't exist or aren't empty
+# Move console directories to the appropriate Prometheus locations if they don't exist or are empty
 if [ -d "/etc/prometheus/consoles" ] && [ "$(ls -A /etc/prometheus/consoles)" ]; then
-  echo "/etc/prometheus/consoles directory exists and is not empty. Skipping..."
+  echo "/etc/prometheus/consoles directory exists and is not empty. Skipping..."  # Skip if directory is non-empty
 else
-  mv consoles /etc/prometheus/
+  mv consoles /etc/prometheus/  # Move consoles directory
 fi
 
 if [ -d "/etc/prometheus/console_libraries" ] && [ "$(ls -A /etc/prometheus/console_libraries)" ]; then
-  echo "/etc/prometheus/console_libraries directory exists and is not empty. Skipping..."
+  echo "/etc/prometheus/console_libraries directory exists and is not empty. Skipping..."  # Skip if directory is non-empty
 else
-  mv console_libraries /etc/prometheus/
+  mv console_libraries /etc/prometheus/  # Move console libraries directory
 fi
 
-# Move binaries to the appropriate location
+# Move Prometheus and promtool binaries to /usr/local/bin
 mv prometheus promtool /usr/local/bin/
 
-# Define Prometheus configuration
-echo -e "${green}**************Define Prometheus config**********${reset}"
+# Define the Prometheus configuration file
+echo -e "${green}************* Defining Prometheus configuration *************${reset}"
 if [ -f "/etc/prometheus/prometheus.yml" ]; then
-  rm "/etc/prometheus/prometheus.yml"
+  rm "/etc/prometheus/prometheus.yml"  # Remove existing config if it exists
 fi
-sudo tee /etc/prometheus/prometheus.yml<<EOF
+# Create a new Prometheus configuration
+sudo tee /etc/prometheus/prometheus.yml <<EOF
 global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
+  scrape_interval: 15s  # Interval between scraping targets
+  evaluation_interval: 15s  # Interval for evaluating rules
 alerting:
   alertmanagers:
     - static_configs:
-        - targets: []
-rule_files: []
+        - targets: []  # List of alert manager targets
+rule_files: []  # List of rule files
 scrape_configs:
-  - job_name: "prometheus"
-    metrics_path: /metrics
+  - job_name: "prometheus"  # Job name for the Prometheus server
+    metrics_path: /metrics  # Path to scrape metrics
     static_configs:
-      - targets: ["localhost:9345"]
-  - job_name: "story"
-    scrape_interval: 5s
-    metrics_path: /
+      - targets: ["localhost:9345"]  # Target for scraping
+  - job_name: "story"  # Job name for Story metrics
+    scrape_interval: 5s  # Scraping interval for Story metrics
+    metrics_path: /  # Path to scrape Story metrics
     static_configs:
-      - targets: ['localhost:26660']
+      - targets: ['localhost:26660']  # Target for scraping Story
 EOF
 
-# Create Prometheus systemd service
-echo -e "${green}************Create Prometheus service***********${reset}"
-
-sudo tee /etc/systemd/system/prometheus.service<<EOF
+# Create a systemd service file for Prometheus
+echo -e "${green}************* Creating Prometheus systemd service *************${reset}"
+sudo tee /etc/systemd/system/prometheus.service <<EOF
 [Unit]
-Description=Prometheus
-Wants=network-online.target
-After=network-online.target
+Description=Prometheus  # Service description
+Wants=network-online.target  # Ensure network is online
+After=network-online.target  # Start after network is online
+
 [Service]
 Type=simple
-User=root
-ExecReload=/bin/kill -HUP \$MAINPID
+User=root  # Run as root user
+ExecReload=/bin/kill -HUP \$MAINPID  # Reload service
 ExecStart=/usr/local/bin/prometheus \
   --config.file=/etc/prometheus/prometheus.yml \
   --storage.tsdb.path=/var/lib/prometheus \
   --web.console.templates=/etc/prometheus/consoles \
   --web.console.libraries=/etc/prometheus/console_libraries \
-  --web.listen-address=0.0.0.0:9344
-Restart=always
+  --web.listen-address=0.0.0.0:9344  # Address for Prometheus web UI
+Restart=always  # Always restart the service
+
 [Install]
-WantedBy=multi-user.target
+WantedBy=multi-user.target  # Service target
 EOF
 
-# Reload systemd, enable and start Prometheus
-echo -e "${green}**************Reload systemd, enable, and start Prometheus**********${reset}"
-systemctl daemon-reload
-systemctl enable prometheus
-systemctl start prometheus
+# Reload systemd to recognize the new service and enable/start it
+echo -e "${green}************* Reloading systemd, enabling, and starting Prometheus *************${reset}"
+systemctl daemon-reload  # Reload systemd manager configuration
+systemctl enable prometheus  # Enable Prometheus to start on boot
+systemctl start prometheus  # Start the Prometheus service
 
+# Check the status of the Prometheus service
 check_service_status "prometheus"
 
-# Install Grafana
-echo -e "${green}**************Install Grafana**********${reset}"
-apt-get install -y apt-transport-https software-properties-common wget
-wget -q -O - https://packages.grafana.com/gpg.key | apt-key add -
+# Install Grafana for visualization
+echo -e "${green}************* Installing Grafana *************${reset}"
+apt-get install -y apt-transport-https software-properties-common wget  # Install dependencies
+wget -q -O - https://packages.grafana.com/gpg.key | apt-key add -  # Add Grafana GPG key
+# Add Grafana repository to the sources list
 echo "deb https://packages.grafana.com/enterprise/deb stable main" | tee -a /etc/apt/sources.list.d/grafana.list
-apt-get update -y
-apt-get install grafana-enterprise -y
-systemctl daemon-reload
-systemctl enable grafana-server
-systemctl start grafana-server
+apt-get update -y  # Update package lists
+apt-get install grafana-enterprise -y  # Install Grafana Enterprise
+systemctl daemon-reload  # Reload systemd
+systemctl enable grafana-server  # Enable Grafana to start on boot
+systemctl start grafana-server  # Start the Grafana service
 
+# Check the status of the Grafana service
 check_service_status "grafana-server"
 
 # Install and configure Prometheus Node Exporter
-echo -e "${green}*************Install and start Prometheus Node Exporter***********${reset}"
-apt install prometheus-node-exporter -y
+echo -e "${green}************* Installing and starting Prometheus Node Exporter *************${reset}"
+apt install prometheus-node-exporter -y  # Install Node Exporter
 
-service_file="/etc/systemd/system/prometheus-node-exporter.service"
+service_file="/etc/systemd/system/prometheus-node-exporter.service"  # Service file path
 
+# Remove existing Node Exporter service file if it exists
 if [ -e "$service_file" ]; then
-    rm "$service_file"
-    echo "File $service_file removed."
+    rm "$service_file"  # Remove the file
+    echo "File $service_file removed."  # Confirmation message
 else
-    echo "File $service_file does not exist."
+    echo "File $service_file does not exist."  # Informative message
 fi
 
-sudo tee /etc/systemd/system/prometheus-node-exporter.service<<EOF
+# Create a new systemd service file for Node Exporter
+sudo tee /etc/systemd/system/prometheus-node-exporter.service <<EOF
 [Unit]
-Description=prometheus-node-exporter
-Wants=network-online.target
-After=network-online.target
+Description=Prometheus Node Exporter  # Service description
+Wants=network-online.target  # Ensure network is online
+After=network-online.target  # Start after network is online
+
 [Service]
 Type=simple
-User=$USER
-ExecStart=/usr/bin/prometheus-node-exporter --web.listen-address=0.0.0.0:9345
-Restart=always
+User=root  # Run as root user
+ExecStart=/usr/bin/prometheus-node-exporter  # Start Node Exporter
+Restart=always  # Always restart the service
+
 [Install]
-WantedBy=multi-user.target
+WantedBy=multi-user.target  # Service target
 EOF
 
-systemctl enable prometheus-node-exporter
-systemctl start prometheus-node-exporter
+# Enable and start the Node Exporter service
+systemctl enable prometheus-node-exporter  # Enable Node Exporter to start on boot
+systemctl start prometheus-node-exporter  # Start the Node Exporter service
 
-# Update Grafana port number
-echo -e "${green}*************New port number for Grafana***********${reset}"
-grafana_config_file="/etc/grafana/grafana.ini"
-new_port="9346"
-
-if [ ! -f "$grafana_config_file" ]; then
-  echo "Grafana configuration file not found: $grafana_config_file"
-  exit 1
-fi
-
-sed -i "s/^;http_port = .*/http_port = $new_port/" "$grafana_config_file"
-systemctl restart grafana-server
-check_service_status "grafana-server"
-
-# Enable Prometheus configuration in story config
-echo -e "${green}*************Change config prometheus ON ***********${reset}"
-file_path="$HOME/.story/story/config/config.toml"
-search_text="prometheus = false"
-replacement_text="prometheus = true"
-
-if grep -qFx "$replacement_text" "$file_path"; then
-  echo "Replacement text already exists. No changes needed."
-else
-  sed -i "s/$search_text/$replacement_text/g" "$file_path"
-  echo "Text replaced successfully."
-fi
-
-# Restart services
-systemctl restart prometheus-node-exporter
-systemctl restart prometheus
-systemctl restart grafana-server
-systemctl restart story
-
-sleep 3
-
-# Check status of all services
+# Check the status of the Node Exporter service
 check_service_status "prometheus-node-exporter"
-check_service_status "prometheus"
-check_service_status "grafana-server"
-check_service_status "story"
 
-# Grafana setup and dashboard configuration
-grafana_host="http://localhost:9346"
-admin_user="admin"
-admin_password="admin"
-prometheus_url="http://localhost:9344"
-dashboard_url="https://raw.githubusercontent.com/x038xx77/STORY-Testnet-Blockchain/main/dashboard_story.json"
-
-echo -e "${green}***********Downloading and modifying the dashboard_story.json*************${reset}"
-curl -s "$dashboard_url" -o $HOME/dashboard_story.json
-
-# Replace validator address in the dashboard JSON
-echo -e "${green}***********Replacing validator address in the dashboard_story.json*************${reset}"
-sed -i "s/FCB1BF9FBACE6819137DFC999255175B7CA23C5D/$story_address/g" $HOME/dashboard_story.json
-
-# Configure Prometheus as a data source in Grafana
-echo -e "${green}***********Configuring Grafana data source*************${reset}"
-
-data_source_json=$(cat <<EOF
-{
-  "name": "Prometheus",
-  "type": "prometheus",
-  "url": "$prometheus_url",
-  "access": "proxy",
-  "basicAuth": false
-}
-EOF
-)
-
-curl -s -X POST -H "Content-Type: application/json" -d "$data_source_json" "$grafana_host/api/datasources" -u "$admin_user:$admin_password"
-
-# Import the Grafana dashboard
-echo -e "${green}***********Importing Grafana dashboard*************${reset}"
-
-dashboard_json=$(jq -c . < $HOME/dashboard_story.json)
-dashboard_payload=$(cat <<EOF
-{
-  "dashboard": $dashboard_json,
-  "overwrite": true
-}
-EOF
-)
-
-curl -s -X POST -H "Content-Type: application/json" -d "$dashboard_payload" "$grafana_host/api/dashboards/db" -u "$admin_user:$admin_password"
+# Conclusion message
+echo -e "${pink}************* Installation and configuration completed! *************${reset}"
+echo -e "${pink}Prometheus and Grafana are now set up and running on your server!${reset}"
