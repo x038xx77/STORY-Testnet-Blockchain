@@ -226,7 +226,7 @@ check_service_status "grafana-server"
 check_service_status "story"
 
 # Grafana setup and dashboard configuration
-grafana_host="http://localhost:9346"
+grafana_host="http://localhost:$new_port"
 admin_user="admin"
 admin_password="admin"
 prometheus_url="http://localhost:9344"
@@ -237,15 +237,45 @@ curl -s "$dashboard_url" -o $HOME/dashboard_story.json
 
 # Replace validator address in the dashboard JSON
 echo -e "${green}***********Replacing validator address in the dashboard_story.json*************${reset}"
-sed -i "s/FCB1BF9FBACE681913B4A3C20A5FF09B93B6AA00/$story_address/g" $HOME/dashboard_story.json
-sed -i "s/$prometheus_url/$grafana_host/g" $HOME/dashboard_story.json
+sed -i "s/FCB1BF9FBACE6819137DFC999255175B7CA23C5D/$story_address/g" $HOME/dashboard_story.json
 
-# Adding the dashboard
-echo -e "${green}***********Adding dashboard to Grafana*************${reset}"
-curl -X POST -H "Content-Type: application/json" \
-  -d "{\"dashboard\":$(< $HOME/dashboard_story.json),\"folderId\":0,\"overwrite\":true}" \
-  -u "$admin_user:$admin_password" \
-  "$grafana_host/api/dashboards/db"
+# Configure Prometheus as a data source
+echo -e "${green}***********Adding Prometheus as data source in Grafana*************${reset}"
+data_source_payload=$(cat <<EOF
+{
+  "name": "Prometheus",
+  "type": "prometheus",
+  "url": "$prometheus_url",
+  "access": "proxy",
+  "basicAuth": false,
+  "isDefault": true
+}
+EOF
+)
 
-# Final output
-echo -e "${pink}***********Grafana is set up successfully! You can access it at: $grafana_host/dashboard/file/dashboard_story.json***********${reset}"
+curl -s -X POST -H "Content-Type: application/json" -d "$data_source_payload" "$grafana_host/api/datasources" -u "$admin_user:$admin_password"
+
+# Import the Grafana dashboard
+echo -e "${green}***********Importing Grafana dashboard*************${reset}"
+
+dashboard_json=$(jq -c . < $HOME/dashboard_story.json)
+dashboard_payload=$(cat <<EOF
+{
+  "dashboard": $dashboard_json,
+  "overwrite": true
+}
+EOF
+)
+
+response=$(curl -s -X POST -H "Content-Type: application/json" -d "$dashboard_payload" "$grafana_host/api/dashboards/db" -u "$admin_user:$admin_password")
+
+# Extract the URL from the response
+dashboard_uid=$(echo "$response" | jq -r '.uid')
+
+if [ "$dashboard_uid" != "null" ]; then
+  echo "Grafana is set up successfully! You can access it at: $grafana_host/d/$dashboard_uid/story-testnet-blockchain"
+else
+  echo "Failed to import the dashboard."
+fi
+
+echo -e "${green}***********Setup complete!*************${reset}"
