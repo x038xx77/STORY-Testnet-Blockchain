@@ -273,4 +273,4 @@ systemctl status prometheus-node-exporter
 
 ### URL Dashboard Grafana!
 
-[<img alt="final" src="https://github.com/x038xx77/STORY-Testnet-Blockchain/blob/main/setupСomplete.png" width="560px">]
+[<img alt="final" src="https://github.com/x038xx77/STORY-Testnet-Blockchain/blob/main/setupСomplete.png">]
